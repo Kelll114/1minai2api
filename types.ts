@@ -35,7 +35,7 @@ export interface ChatCompletionRequest {
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: string | Array<{ type: string; text: string }>;
 }
 
 // OpenAI Chat 响应类型

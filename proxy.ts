@@ -17,28 +17,40 @@ export class MinAIProxy {
    * 验证 AUTH_SECRET 并从数据库随机获取可用 token
    */
   private async getValidToken(authHeader: string | null): Promise<string | null> {
+    console.log("[DEBUG] getValidToken called with authHeader:", authHeader ? "present" : "missing");
+    
     if (!authHeader) {
+      console.log("[DEBUG] No auth header provided");
       return null;
     }
 
     const providedSecret = authHeader.replace(/^Bearer\s+/i, "");
+    console.log("[DEBUG] Provided secret:", providedSecret);
+    console.log("[DEBUG] Expected secret:", config.authSecret);
     
     // 验证是否为正确的 AUTH_SECRET
     if (providedSecret !== config.authSecret) {
+      console.log("[DEBUG] AUTH_SECRET validation failed");
       return null;
     }
     
     // 从数据库获取所有可用的 token
     const tokens = await this.db.listTokens();
+    console.log("[DEBUG] Total tokens in database:", tokens.length);
+    
     const activeTokens = tokens.filter(t => !t.disabled && !this.isTokenExpired(t));
+    console.log("[DEBUG] Active tokens count:", activeTokens.length);
     
     if (activeTokens.length === 0) {
+      console.log("[DEBUG] No active tokens available");
       return null;
     }
     
     // 随机选择一个可用的 token
     const randomIndex = Math.floor(Math.random() * activeTokens.length);
-    return activeTokens[randomIndex].token;
+    const selectedToken = activeTokens[randomIndex].token;
+    console.log("[DEBUG] Selected token (first 20 chars):", selectedToken.substring(0, 20) + "...");
+    return selectedToken;
   }
 
   /**
@@ -55,12 +67,16 @@ export class MinAIProxy {
    * 获取用户信息以获取 teamId（带缓存）
    */
   private async getUserInfo(token: string): Promise<UserInfo | null> {
+    console.log("[DEBUG] getUserInfo called for token:", token.substring(0, 20) + "...");
+    
     // 先尝试从缓存获取
     const cached = await this.db.getCachedUserInfo(token);
     if (cached) {
+      console.log("[DEBUG] Using cached user info for teamId:", cached.teamId);
       return cached;
     }
 
+    console.log("[DEBUG] Cache miss, fetching from API...");
     // 缓存未命中，从 API 获取
     try {
       const response = await fetch(`${this.baseUrl}/users`, {
@@ -70,30 +86,43 @@ export class MinAIProxy {
         },
       });
 
+      console.log("[DEBUG] API response status:", response.status);
       if (!response.ok) {
+        console.log("[DEBUG] API request failed with status:", response.status);
+        const errorText = await response.text();
+        console.log("[DEBUG] Error response:", errorText);
         return null;
       }
 
       const data = await response.json();
+      console.log("[DEBUG] API response data:", JSON.stringify(data, null, 2));
       
-      // 解析用户信息
-      const teamId = data.teams?.[0]?.uuid || data.teamId;
+      // 解析用户信息 - 根据实际 API 响应结构
+      const teamId = data.user?.teams?.[0]?.teamId ||
+                    data.teams?.[0]?.teamId ||
+                    data.teams?.[0]?.uuid ||
+                    data.teamId;
+      
       if (!teamId) {
+        console.log("[DEBUG] No teamId found in response");
         return null;
       }
 
+      console.log("[DEBUG] Found teamId:", teamId);
       const userInfo: UserInfo = {
         teamId,
-        userId: data.uuid || data.userId,
-        userName: data.name || data.userName,
+        userId: data.user?.uuid || data.uuid || data.userId,
+        userName: data.user?.teams?.[0]?.userName || data.name || data.userName,
         cachedAt: Date.now(),
       };
 
       // 缓存到数据库
       await this.db.cacheUserInfo(token, userInfo);
+      console.log("[DEBUG] User info cached successfully");
 
       return userInfo;
-    } catch (_error) {
+    } catch (error) {
+      console.log("[DEBUG] Error in getUserInfo:", error);
       return null;
     }
   }
@@ -140,27 +169,47 @@ export class MinAIProxy {
    * 转换 OpenAI messages 到 1min.ai prompt
    */
   private convertMessages(messages: ChatMessage[]): string {
-    // 简单实现：提取最后一条用户消息
-    const userMessages = messages.filter((m) => m.role === "user");
-    if (userMessages.length === 0) {
-      return "Hello";
-    }
-    return userMessages[userMessages.length - 1].content;
+    // 将所有消息转换为 {role}:\n{content} 格式
+    const formattedMessages = messages.map((message) => {
+      let content: string;
+      
+      // 处理 content 为数组的情况
+      if (Array.isArray(message.content)) {
+        // 提取所有 text 内容并连接
+        content = message.content
+          .filter(item => item.type === 'text' && item.text)
+          .map(item => item.text)
+          .join('\n');
+      } else {
+        // content 为字符串的情况
+        content = message.content;
+      }
+      
+      return `${message.role}:\n${content}`;
+    });
+    
+    // 用换行符连接所有消息
+    return formattedMessages.join('\n\n');
   }
 
   /**
-   * 映射模型名称
+   * 映射模型名称 - 直接使用客户端传入的模型名称
+   * 如果模型名称在 models.json 中不存在，则使用默认模型
    */
   private mapModel(model: string): string {
+    // 常见的 OpenAI 模型映射到 1min.ai 的对应模型
     const modelMap: Record<string, string> = {
-      "gpt-4": "claude-opus-4-1-20250805",
-      "gpt-4o": "claude-opus-4-1-20250805",
-      "gpt-3.5-turbo": "claude-sonnet-3-5-20240229",
+      "gpt-4": "gpt-5",
+      "gpt-4o": "gpt-5",
+      "gpt-4-turbo": "gpt-5.1",
+      "gpt-3.5-turbo": "gpt-5-mini",
       "claude-3-opus": "claude-opus-4-1-20250805",
-      "claude-3-sonnet": "claude-sonnet-3-5-20240229",
+      "claude-3-sonnet": "claude-sonnet-4-20250514",
+      "claude-3-haiku": "claude-3-haiku-20240307",
     };
 
-    return modelMap[model] || "claude-opus-4-1-20250805";
+    // 如果有映射则使用映射，否则直接使用原始模型名称
+    return modelMap[model] || model;
   }
 
   /**
@@ -345,6 +394,7 @@ export class MinAIProxy {
     const decoder = new TextDecoder();
     const encoder = new TextEncoder();
     let buffer = "";
+    let eventType = "";
     const chatId = `chatcmpl-${Date.now()}`;
 
     return new ReadableStream({
@@ -352,6 +402,7 @@ export class MinAIProxy {
         try {
           const { done, value } = await reader.read();
 
+              // console.log(value);
           if (done) {
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
             controller.close();
@@ -363,11 +414,43 @@ export class MinAIProxy {
           buffer = lines.pop() || "";
 
           for (const line of lines) {
-            if (line.startsWith("event: content")) {
-              continue;
+              console.log(line);
+            // 检测 event 类型
+            if (line.startsWith("event: ")) {
+              eventType = line.substring(7).trim();
+              
+              // 当收到 event: done 时，检查下一行的 data
+              if (eventType === "done" || eventType === 'result') {
+                continue;
+              }
             }
+            
             if (line.startsWith("data: ")) {
               const data = line.substring(6);
+              // 如果是 done 事件的数据
+              if (eventType === "done" || eventType ==='result') {
+                try {
+                  // const parsed = JSON.parse(data);
+                  if (true) {
+                    // 发送 [DONE] 并断开连接
+                    controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+                    controller.close();
+                    reader.cancel();
+                    return;
+                  }
+                } catch (_e) {
+                  // 忽略解析错误
+                }
+                eventType = ""; // 重置事件类型
+                continue;
+              }
+              
+              // 跳过 content 事件标记行
+              if (eventType === "content") {
+                eventType = ""; // 重置事件类型
+              }
+              
+              // 解析普通内容数据
               try {
                 const parsed = JSON.parse(data);
                 if (parsed.content) {
@@ -390,6 +473,21 @@ export class MinAIProxy {
                   controller.enqueue(
                     encoder.encode(`data: ${JSON.stringify(openaiChunk)}\n\n`)
                   );
+                } else {
+                                  try {
+                  // const parsed = JSON.parse(data);
+                  if (true) {
+                    // 发送 [DONE] 并断开连接
+                    controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+                    controller.close();
+                    reader.cancel();
+                    return;
+                  }
+                } catch (_e) {
+                  // 忽略解析错误
+                }
+                eventType = ""; // 重置事件类型
+                continue;
                 }
               } catch (_e) {
                 // 忽略解析错误

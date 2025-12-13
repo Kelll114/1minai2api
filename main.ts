@@ -18,9 +18,9 @@ setInterval(async () => {
 }, config.autoCleanupInterval);
 
 /**
- * 处理请求的主函数
+ * 处理请求的主函数 - 导出供 Deno Deploy 使用
  */
-async function handleRequest(req: Request): Promise<Response> {
+export async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
 
@@ -263,10 +263,13 @@ async function handleRequest(req: Request): Promise<Response> {
   return new Response("Not Found", { status: 404 });
 }
 
-// 启动服务器
-console.log(`🚀 1min.ai Proxy Server starting on port ${config.port}`);
-console.log(`📝 OpenAI API endpoint: http://localhost:${config.port}/v1/chat/completions`);
-console.log(`🔧 Admin API endpoint: http://localhost:${config.port}/admin/tokens`);
-console.log(`🔑 Auth secret configured: ${config.authSecret !== "your-secret-key-here"}`);
+// 只在本地开发环境启动服务器（不在 Deno Deploy 中运行）
+if (Deno.env.get("DENO_DEPLOYMENT_ID") === undefined) {
+  // 启动服务器
+  console.log(`🚀 1min.ai Proxy Server starting on port ${config.port}`);
+  console.log(`📝 OpenAI API endpoint: http://localhost:${config.port}/v1/chat/completions`);
+  console.log(`🔧 Admin API endpoint: http://localhost:${config.port}/admin/tokens`);
+  console.log(`🔑 Auth secret configured: ${config.authSecret !== "your-secret-key-here"}`);
 
-Deno.serve({ port: config.port }, handleRequest);
+  Deno.serve({ port: config.port }, handler);
+}
