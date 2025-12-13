@@ -214,6 +214,7 @@ export class MinAIProxy {
 
   /**
    * 处理聊天完成请求（非流式）
+   * 使用流式API收集所有响应块，然后合并为完整响应
    */
   async handleChatCompletion(
     request: ChatCompletionRequest,
@@ -243,14 +244,15 @@ export class MinAIProxy {
     const model = this.mapModel(request.model);
 
     try {
+      // 使用流式API
       const response = await fetch(
-        `${this.baseUrl}/teams/${userInfo.teamId}/features/sse?isStreaming=false`,
+        `${this.baseUrl}/teams/${userInfo.teamId}/features/sse?isStreaming=true`,
         {
           method: "POST",
           headers: {
             "content-type": "application/json",
             "x-auth-token": `Bearer ${token}`,
-            "accept": "application/json",
+            "accept": "text/event-stream",
           },
           body: JSON.stringify({
             type: "CHAT_WITH_AI",
@@ -274,14 +276,14 @@ export class MinAIProxy {
         }
       );
 
-      if (!response.ok) {
+      if (!response.ok || !response.body) {
         return { error: "Failed to get response from 1min.ai", status: response.status };
       }
 
-      const data = await response.json();
-      const content = data.aiRecordDetail?.resultObject?.[0] || "";
+      // 收集所有流式响应块
+      const fullContent = await this.collectStreamContent(response.body);
 
-      // 转换为 OpenAI 格式
+      // 转换为 OpenAI 非流式格式
       return {
         id: `chatcmpl-${Date.now()}`,
         object: "chat.completion",
@@ -292,22 +294,89 @@ export class MinAIProxy {
             index: 0,
             message: {
               role: "assistant",
-              content,
+              content: fullContent,
             },
             finish_reason: "stop",
           },
         ],
         usage: {
-          prompt_tokens: data.aiRecord?.metadata?.inputToken || 0,
-          completion_tokens: data.aiRecord?.metadata?.outputToken || 0,
-          total_tokens:
-            (data.aiRecord?.metadata?.inputToken || 0) +
-            (data.aiRecord?.metadata?.outputToken || 0),
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0,
         },
       };
     } catch (error) {
       return { error: `Request failed: ${error}`, status: 500 };
     }
+  }
+
+  /**
+   * 收集流式响应的所有内容块
+   */
+  private async collectStreamContent(stream: ReadableStream<Uint8Array>): Promise<string> {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullContent = "";
+    let eventType = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          // 检测 event 类型
+          if (line.startsWith("event: ")) {
+            eventType = line.substring(7).trim();
+            
+            // 当收到 done 或 result 事件时结束
+            if (eventType === "done" || eventType === "result") {
+              reader.cancel();
+              return fullContent;
+            }
+          }
+          
+          if (line.startsWith("data: ")) {
+            const data = line.substring(6);
+            
+            // 如果是 done 或 result 事件的数据
+            if (eventType === "done" || eventType === "result") {
+              reader.cancel();
+              return fullContent;
+            }
+            
+            // 跳过 content 事件标记行
+            if (eventType === "content") {
+              eventType = "";
+            }
+            
+            // 解析内容数据
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.content) {
+                fullContent += parsed.content;
+              }
+            } catch (_e) {
+              // 忽略解析错误
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[DEBUG] Error collecting stream content:", error);
+    } finally {
+      reader.cancel();
+    }
+
+    return fullContent;
   }
 
   /**
