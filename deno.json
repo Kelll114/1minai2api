@@ -1,0 +1,16 @@
+{
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --allow-read --unstable-kv main.ts",
+    "start": "deno run --allow-net --allow-env --allow-read --unstable-kv main.ts"
+  },
+  "imports": {
+    "@std/http": "jsr:@std/http@^1.0.0",
+    "@std/http/file-server": "jsr:@std/http@^1.0.0/file-server",
+    "@std/encoding": "jsr:@std/encoding@^1.0.0",
+    "@std/encoding/base64url": "jsr:@std/encoding@^1.0.0/base64url"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "allowJs": false
+  }
+}

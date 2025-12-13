@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1min.ai Token 管理面板</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #5568d3;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-danger {
+            background: #f56565;
+        }
+
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+
+        .btn-success {
+            background: #48bb78;
+        }
+
+        .btn-success:hover {
+            background: #38a169;
+        }
+
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 12px;
+            margin-left: 5px;
+        }
+
+        .token-list {
+            margin-top: 20px;
+        }
+
+        .token-item {
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .token-item.disabled {
+            border-left-color: #f56565;
+            opacity: 0.7;
+        }
+
+        .token-item.expired {
+            border-left-color: #ed8936;
+            opacity: 0.6;
+        }
+
+        .token-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .token-note {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .token-status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-active {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .status-disabled {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .status-expired {
+            background: #feebc8;
+            color: #7c2d12;
+        }
+
+        .token-info {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .token-string {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            color: #666;
+            word-break: break-all;
+            background: white;
+            padding: 8px;
+            border-radius: 3px;
+            margin-bottom: 10px;
+        }
+
+        .token-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .alert {
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
+        .alert-success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .alert-error {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 1min.ai Token 管理面板</h1>
+            <p class="subtitle">OpenAI 兼容的反向代理服务 - Token 管理系统</p>
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="totalTokens">0</div>
+                <div class="stat-label">总 Token 数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="activeTokens">0</div>
+                <div class="stat-label">激活的 Token</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="disabledTokens">0</div>
+                <div class="stat-label">已禁用的 Token</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>添加新 Token</h2>
+            <div id="addAlert" class="hidden"></div>
+            <form id="addTokenForm">
+                <div class="form-group">
+                    <label for="authSecret">认证秘钥</label>
+                    <input type="password" id="authSecret" placeholder="输入认证秘钥" required>
+                </div>
+                <div class="form-group">
+                    <label for="token">1min.ai JWT Token</label>
+                    <textarea id="token" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." required></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="note">备注</label>
+                    <input type="text" id="note" placeholder="例如：测试账号、主账号等">
+                </div>
+                <button type="submit">添加 Token</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Token 列表</h2>
+            <button onclick="loadTokens()" style="margin-bottom: 15px;">刷新列表</button>
+            <div id="tokenList" class="loading">加载中...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let authSecret = localStorage.getItem('authSecret') || '';
+
+        // 加载认证秘钥
+        if (authSecret) {
+            document.getElementById('authSecret').value = authSecret;
+        }
+
+        // 添加 Token
+        document.getElementById('addTokenForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const secret = document.getElementById('authSecret').value;
+            const token = document.getElementById('token').value.trim();
+            const note = document.getElementById('note').value.trim();
+            
+            localStorage.setItem('authSecret', secret);
+            authSecret = secret;
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/tokens`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${secret}`
+                    },
+                    body: JSON.stringify({ token, note })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showAlert('addAlert', 'Token 添加成功！', 'success');
+                    document.getElementById('token').value = '';
+                    document.getElementById('note').value = '';
+                    loadTokens();
+                } else {
+                    showAlert('addAlert', data.error || '添加失败', 'error');
+                }
+            } catch (error) {
+                showAlert('addAlert', `请求失败: ${error.message}`, 'error');
+            }
+        });
+
+        // 加载 Token 列表
+        async function loadTokens() {
+            const tokenList = document.getElementById('tokenList');
+            tokenList.innerHTML = '<div class="loading">加载中...</div>';
+
+            if (!authSecret) {
+                tokenList.innerHTML = '<p style="color: #999;">请先输入认证秘钥</p>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/tokens`, {
+                    headers: {
+                        'Authorization': `Bearer ${authSecret}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    tokenList.innerHTML = `<p style="color: #f56565;">${data.error || '加载失败'}</p>`;
+                    return;
+                }
+
+                const tokens = data.tokens || [];
+                
+                if (tokens.length === 0) {
+                    tokenList.innerHTML = '<p style="color: #999;">暂无 Token</p>';
+                    updateStats(0, 0, 0);
+                    return;
+                }
+
+                // 统计
+                let active = 0, disabled = 0;
+                tokens.forEach(t => {
+                    if (t.disabled) disabled++;
+                    else active++;
+                });
+                updateStats(tokens.length, active, disabled);
+
+                // 渲染列表
+                tokenList.innerHTML = tokens.map(t => renderTokenItem(t)).join('');
+            } catch (error) {
+                tokenList.innerHTML = `<p style="color: #f56565;">请求失败: ${error.message}</p>`;
+            }
+        }
+
+        // 渲染单个 Token
+        function renderTokenItem(tokenData) {
+            const isExpired = tokenData.expiresAt && tokenData.expiresAt < Date.now();
+            const statusClass = tokenData.disabled ? 'disabled' : (isExpired ? 'expired' : '');
+            const statusLabel = tokenData.disabled ? 'status-disabled' : (isExpired ? 'status-expired' : 'status-active');
+            const statusText = tokenData.disabled ? '已禁用' : (isExpired ? '已过期' : '激活');
+
+            const createdAt = new Date(tokenData.createdAt).toLocaleString('zh-CN');
+            const expiresAt = tokenData.expiresAt ? new Date(tokenData.expiresAt).toLocaleString('zh-CN') : '无';
+
+            return `
+                <div class="token-item ${statusClass}">
+                    <div class="token-header">
+                        <div class="token-note">${tokenData.note || '无备注'}</div>
+                        <span class="token-status ${statusLabel}">${statusText}</span>
+                    </div>
+                    <div class="token-info">
+                        创建时间: ${createdAt} | 过期时间: ${expiresAt}
+                    </div>
+                    ${tokenData.userInfo ? `
+                        <div class="token-info">
+                            Team ID: ${tokenData.userInfo.teamId} | 
+                            ${tokenData.userInfo.userName || 'Unknown User'}
+                        </div>
+                    ` : ''}
+                    <div class="token-string">${tokenData.token}</div>
+                    <div class="token-actions">
+                        ${!tokenData.disabled && !isExpired ? `
+                            <button class="btn-small btn-danger" onclick="disableToken('${encodeURIComponent(tokenData.token)}')">禁用</button>
+                        ` : ''}
+                        ${tokenData.disabled && !isExpired ? `
+                            <button class="btn-small btn-success" onclick="enableToken('${encodeURIComponent(tokenData.token)}')">启用</button>
+                        ` : ''}
+                        <button class="btn-small" onclick="updateNote('${encodeURIComponent(tokenData.token)}', '${tokenData.note || ''}')">修改备注</button>
+                        <button class="btn-small btn-danger" onclick="deleteToken('${encodeURIComponent(tokenData.token)}')">删除</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 禁用 Token
+        async function disableToken(token) {
+            if (!confirm('确定要禁用这个 Token 吗？')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/tokens/${token}/disable`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authSecret}`
+                    }
+                });
+
+                if (response.ok) {
+                    loadTokens();
+                } else {
+                    alert('禁用失败');
+                }
+            } catch (error) {
+                alert(`请求失败: ${error.message}`);
+            }
+        }
+
+        // 启用 Token
+        async function enableToken(token) {
+            try {
+                const response = await fetch(`${API_BASE}/admin/tokens/${token}/enable`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authSecret}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    loadTokens();
+                } else {
+                    alert(data.error || '启用失败');
+                }
+            } catch (error) {
+                alert(`请求失败: ${error.message}`);
+            }
+        }
+
+        // 删除 Token
+        async function deleteToken(token) {
+            if (!confirm('确定要删除这个 Token 吗？此操作不可恢复！')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/tokens/${token}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${authSecret}`
+                    }
+                });
+
+                if (response.ok) {
+                    loadTokens();
+                } else {
+                    alert('删除失败');
+                }
+            } catch (error) {
+                alert(`请求失败: ${error.message}`);
+            }
+        }
+
+        // 修改备注
+        async function updateNote(token, currentNote) {
+            const newNote = prompt('输入新的备注:', currentNote);
+            if (newNote === null) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/tokens/${token}/note`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authSecret}`
+                    },
+                    body: JSON.stringify({ note: newNote })
+                });
+
+                if (response.ok) {
+                    loadTokens();
+                } else {
+                    alert('修改失败');
+                }
+            } catch (error) {
+                alert(`请求失败: ${error.message}`);
+            }
+        }
+
+        // 显示提示
+        function showAlert(id, message, type) {
+            const alert = document.getElementById(id);
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            alert.classList.remove('hidden');
+            setTimeout(() => alert.classList.add('hidden'), 3000);
+        }
+
+        // 更新统计
+        function updateStats(total, active, disabled) {
+            document.getElementById('totalTokens').textContent = total;
+            document.getElementById('activeTokens').textContent = active;
+            document.getElementById('disabledTokens').textContent = disabled;
+        }
+
+        // 页面加载时获取列表
+        loadTokens();
+    </script>
+</body>
+</html>
